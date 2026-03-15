@@ -1,76 +1,81 @@
 <svg viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <!-- Deep, modern Windows 11 Gradient -->
-    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#00C2FF" />
-      <stop offset="100%" style="stop-color:#00459E" />
+    <!-- Background: rich blue to indigo -->
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1E88E5"/>
+      <stop offset="100%" stop-color="#5E35B1"/>
     </linearGradient>
 
-    <!-- Frosted Glass Effect -->
-    <linearGradient id="glassFill" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:0.5" />
-      <stop offset="100%" style="stop-color:#ffffff;stop-opacity:0.1" />
+    <!-- Photo sky: warm sunset -->
+    <linearGradient id="sky" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%"   stop-color="#29B6F6"/>
+      <stop offset="55%"  stop-color="#FFA726"/>
+      <stop offset="100%" stop-color="#EF5350"/>
     </linearGradient>
 
-    <!-- Mountain Scene Gradients -->
-    <linearGradient id="skyGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" style="stop-color:#FF9D00" />
-      <stop offset="100%" style="stop-color:#FF4D00" />
-    </linearGradient>
-    
-    <filter id="softBlur" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="2" />
-    </filter>
+    <clipPath id="photoClip">
+      <rect width="80" height="80" rx="12"/>
+    </clipPath>
 
-    <filter id="dropShadow">
-      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-opacity="0.3"/>
+    <filter id="cardShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="5" stdDeviation="7" flood-color="#000" flood-opacity="0.45"/>
     </filter>
   </defs>
 
-  <!-- 1. Background Shell (rx=28) -->
-  <rect x="8" y="8" width="112" height="112" rx="28" fill="url(#bgGrad)" filter="url(#dropShadow)" />
+  <!-- Background shell -->
+  <rect width="128" height="128" rx="26" fill="url(#bg)"/>
 
-  <!-- 2. The "Original Size" Ghost State -->
-  <!-- Fixed rx to 16 to be perfectly concentric with the background (28 - 12 margin) -->
-  <rect x="20" y="20" width="88" height="88" rx="16" fill="none" stroke="white" stroke-width="2" stroke-dasharray="8 4" opacity="0.2" />
+  <!-- Top-edge gloss -->
+  <path d="M28 0 H100 A26 26 0 0 1 128 28 V0 Z" fill="white" opacity="0.09"/>
 
-  <!-- 3. The "Resizing" Image Card -->
-  <g transform="translate(20, 20)" filter="url(#dropShadow)">
-    <!-- Glass Pane -->
-    <rect x="0" y="0" width="64" height="64" rx="10" fill="url(#glassFill)" stroke="white" stroke-opacity="0.4" stroke-width="1.5" />
-    
-    <!-- Image Content: Sunset Mountains -->
-    <clipPath id="cardClip">
-      <rect x="0" y="0" width="64" height="64" rx="10" />
-    </clipPath>
-    <g clip-path="url(#cardClip)">
-      <rect width="64" height="64" fill="url(#skyGrad)" opacity="0.4" />
-      <circle cx="48" cy="16" r="6" fill="#FFD600" />
-      <path d="M10 64 L32 28 L54 64 Z" fill="#002050" opacity="0.3" />
-      <path d="M-10 64 L20 34 L50 64 Z" fill="#002050" opacity="0.5" />
+  <!-- Ghost card (batch indicator — peeks from behind main card) -->
+  <rect x="20" y="20" width="80" height="80" rx="12" fill="white" opacity="0.22"/>
+
+  <!-- ── Main photo card ───────────────────────────────────── -->
+  <g transform="translate(8, 8)" filter="url(#cardShadow)">
+    <rect width="80" height="80" rx="12" fill="white"/>
+    <g clip-path="url(#photoClip)">
+      <!-- Sky gradient -->
+      <rect width="80" height="80" fill="url(#sky)"/>
+      <!-- Back mountain -->
+      <path d="M0 80 L24 34 L48 80Z" fill="#455A64" opacity="0.55"/>
+      <!-- Front mountain -->
+      <path d="M28 80 L56 18 L84 80Z" fill="#1A237E" opacity="0.78"/>
+      <!-- Snow cap -->
+      <path d="M56 18 L49 34 L63 34Z" fill="white"/>
+      <!-- Sun -->
+      <circle cx="16" cy="16" r="9" fill="#FFD600"/>
+      <!-- Sun halo -->
+      <circle cx="16" cy="16" r="14" fill="#FF8F00" opacity="0.22"/>
     </g>
+    <!-- Card inner border gloss -->
+    <rect width="80" height="80" rx="12" fill="none"
+          stroke="white" stroke-opacity="0.18" stroke-width="1.5"/>
   </g>
 
-  <!-- 4. Professional UI Resize Handles -->
-  <g stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none">
-    <!-- Top Left (Anchor) - Pinned to 20,20 -->
-    <path d="M28 20 H20 V28" opacity="0.8" />
-    
-    <!-- Bottom Right (The Active Handle) -->
-    <g filter="url(#dropShadow)">
-      <!-- Corner Bracket on the Glass (Aligned to 84,84) -->
-      <path d="M76 84 H84 V76" />
-      <!-- Scaling Indicator Arrow -->
-      <path d="M92 92 L104 104 M104 94 V104 H94" stroke-width="4" />
-      <!-- Connection Line -->
-      <line x1="84" y1="84" x2="94" y2="94" stroke-width="2" stroke-dasharray="2 2" opacity="0.6" />
-    </g>
-  </g>
+  <!-- ── Resize handle (bottom-right, anchored to card corner at 88,88) ── -->
 
-  <!-- 5. Active Handle Node (Centered exactly at 84,84) -->
-  <circle cx="84" cy="84" r="5" fill="white" filter="url(#dropShadow)" />
-  <circle cx="84" cy="84" r="2.5" fill="#0078D4" />
+  <!-- Corner L-bracket on the card edge -->
+  <path d="M77 88 L88 88 L88 77"
+        fill="none" stroke="white" stroke-width="4.5"
+        stroke-linecap="round" stroke-linejoin="round"/>
 
-  <!-- 6. Fixed Shine: Now uses an Arc (A) to perfectly match the background squircle radius -->
-  <path d="M40 8 H92 A 28 28 0 0 1 120 36" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" opacity="0.15" />
+  <!-- Dashed connector from handle to arrow -->
+  <line x1="95" y1="95" x2="101" y2="101"
+        stroke="white" stroke-width="2"
+        stroke-dasharray="3 3" opacity="0.45"/>
+
+  <!-- Bold diagonal expand arrow -->
+  <path d="M103 103 L119 119"
+        fill="none" stroke="white" stroke-width="5.5"
+        stroke-linecap="round"/>
+
+  <!-- Arrowhead -->
+  <path d="M109 119 L119 119 L119 109"
+        fill="none" stroke="white" stroke-width="5.5"
+        stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Handle knob at card corner -->
+  <circle cx="88" cy="88" r="7" fill="white" filter="url(#cardShadow)"/>
+  <circle cx="88" cy="88" r="3.5" fill="#1E88E5"/>
 </svg>

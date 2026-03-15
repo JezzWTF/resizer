@@ -5,7 +5,7 @@
         xmlns:conv="clr-namespace:BatchResizer.Converters"
         xmlns:models="clr-namespace:BatchResizer.Models"
         Title="Batch Image Resizer"
-        Icon="icon.ico"
+        Icon="/icon.ico"
         Width="1100" Height="750" MinWidth="900" MinHeight="600"
         WindowStartupLocation="CenterScreen"
         Background="#1E1E1E"
