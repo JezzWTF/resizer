@@ -89,6 +89,13 @@ public class ImageProcessingService
     {
         var fileResult = new FileResult { SourcePath = sourcePath };
 
+        if (!Path.IsPathFullyQualified(sourcePath) || sourcePath.Contains(".."))
+        {
+            fileResult.Status = FileResultStatus.Error;
+            fileResult.ErrorMessage = "Invalid source path.";
+            return fileResult;
+        }
+
         try
         {
             var outputPath = BuildOutputPath(sourcePath, options);
