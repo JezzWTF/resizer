@@ -8,7 +8,7 @@ A Windows desktop app for batch resizing images across folders and subfolders. B
 - **Resize presets** — common sizes out of the box (Thumbnail up to 4K), or set your own width/height
 - **Resize modes** — Fit, Fill, Stretch, Longest Side, Shortest Side, or scale by percentage
 - **Output options** — overwrite originals, save to a subfolder, a custom folder, or mirror the original folder structure
-- **Format conversion** — keep the original format or convert to JPEG, PNG, WebP, or BMP
+- **Format conversion** — keep the original format or convert to JPEG, PNG, WebP, BMP, TIFF, or GIF
 - **Quality control** — adjustable quality for JPEG and WebP output
 - **Metadata preservation** — keeps EXIF, XMP and ICC profiles by default; optionally strip all metadata
 - **Timestamp preservation** — copies the original file's creation and modified dates to the output
@@ -23,18 +23,21 @@ A Windows desktop app for batch resizing images across folders and subfolders. B
 
 ## Building from source
 
-Requires [.NET 8 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/8.0).
+Requires [.NET 8 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/8.0) and `make`.
 
 ```bash
 git clone https://github.com/JezzWTF/resizer.git
 cd resizer
-dotnet build src/BatchResizer/BatchResizer.csproj
+make          # debug build
+make publish  # self-contained single-file exe → ./publish
+make run      # build and run
+make clean    # remove build artifacts
 ```
 
-To produce a self-contained single-file executable:
+To regenerate the app icon after editing `icon.svg` (requires [ImageMagick](https://imagemagick.org)):
 
 ```bash
-dotnet publish src/BatchResizer/BatchResizer.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -o ./publish
+make icon
 ```
 
 ## Test data generation
