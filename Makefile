@@ -42,4 +42,4 @@ icon:
 ## Remove build artifacts
 clean:
 	dotnet clean $(PROJ)
-	rm -rf $(PUBLISH_DIR)
+	-powershell -NoProfile -Command "Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $(PUBLISH_DIR) 2>&1 | Out-Null"
