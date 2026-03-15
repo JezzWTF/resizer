@@ -2,8 +2,10 @@ using System.IO;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats;
 using SixLabors.ImageSharp.Formats.Bmp;
+using SixLabors.ImageSharp.Formats.Gif;
 using SixLabors.ImageSharp.Formats.Jpeg;
 using SixLabors.ImageSharp.Formats.Png;
+using SixLabors.ImageSharp.Formats.Tiff;
 using SixLabors.ImageSharp.Formats.Webp;
 using SixLabors.ImageSharp.Processing;
 using IS_ResizeMode = SixLabors.ImageSharp.Processing.ResizeMode;
@@ -300,6 +302,8 @@ public class ImageProcessingService
         OutputFormat.Png => ".png",
         OutputFormat.WebP => ".webp",
         OutputFormat.Bmp => ".bmp",
+        OutputFormat.Tiff => ".tiff",
+        OutputFormat.Gif => ".gif",
         _ => ".jpg",
     };
 
@@ -315,6 +319,8 @@ public class ImageProcessingService
             OutputFormat.Png => new PngEncoder(),
             OutputFormat.WebP => new WebpEncoder { Quality = options.WebPQuality },
             OutputFormat.Bmp => new BmpEncoder(),
+            OutputFormat.Tiff => new TiffEncoder(),
+            OutputFormat.Gif => new GifEncoder(),
             _ => new JpegEncoder { Quality = options.JpegQuality },
         };
     }
@@ -325,6 +331,8 @@ public class ImageProcessingService
         ".png" => OutputFormat.Png,
         ".webp" => OutputFormat.WebP,
         ".bmp" => OutputFormat.Bmp,
+        ".tiff" or ".tif" => OutputFormat.Tiff,
+        ".gif" => OutputFormat.Gif,
         _ => OutputFormat.Jpeg,
     };
 }

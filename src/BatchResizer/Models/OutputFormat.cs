@@ -7,4 +7,6 @@ public enum OutputFormat
     Png,
     WebP,
     Bmp,
+    Tiff,
+    Gif,
 }
