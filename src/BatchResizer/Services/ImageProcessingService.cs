@@ -315,8 +315,15 @@ public class ImageProcessingService
 
         return format switch
         {
-            OutputFormat.Jpeg => new JpegEncoder { Quality = options.JpegQuality },
-            OutputFormat.Png => new PngEncoder(),
+            OutputFormat.Jpeg => new JpegEncoder
+            {
+                Quality = options.JpegQuality,
+                ColorType = SixLabors.ImageSharp.Formats.Jpeg.JpegEncodingColor.YCbCrRatio420,
+            },
+            OutputFormat.Png => new PngEncoder
+            {
+                CompressionLevel = SixLabors.ImageSharp.Formats.Png.PngCompressionLevel.BestCompression,
+            },
             OutputFormat.WebP => new WebpEncoder { Quality = options.WebPQuality },
             OutputFormat.Bmp => new BmpEncoder(),
             OutputFormat.Tiff => new TiffEncoder(),
