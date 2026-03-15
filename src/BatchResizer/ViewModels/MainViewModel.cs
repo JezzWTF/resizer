@@ -184,12 +184,14 @@ public partial class MainViewModel : ObservableObject
         var files = await Task.Run(() =>
             _discovery.DiscoverFiles(folders, Recursive, extensions));
 
-        // Update per-folder counts
+        // Update per-folder counts and sizes
         foreach (var folderVm in SourceFolders)
         {
-            var count = await Task.Run(() =>
-                _discovery.DiscoverFiles([folderVm.Path], Recursive, extensions).Count);
-            folderVm.ImageCount = count;
+            var folderFiles = await Task.Run(() =>
+                _discovery.DiscoverFiles([folderVm.Path], Recursive, extensions));
+            folderVm.ImageCount = folderFiles.Count;
+            folderVm.TotalSizeBytes = await Task.Run(() =>
+                folderFiles.Sum(f => new FileInfo(f).Length));
         }
 
         ScannedFileCount = files.Count;
@@ -365,7 +367,8 @@ public partial class MainViewModel : ObservableObject
     {
         < 1024 => $"{bytes} B",
         < 1024 * 1024 => $"{bytes / 1024.0:F1} KB",
-        _ => $"{bytes / (1024.0 * 1024):F1} MB",
+        < 1024L * 1024 * 1024 => $"{bytes / (1024.0 * 1024):F1} MB",
+        _ => $"{bytes / (1024.0 * 1024 * 1024):F1} GB",
     };
 
     // ── Settings persistence ─────────────────────────────────────────────────
