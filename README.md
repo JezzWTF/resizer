@@ -17,13 +17,13 @@ A Windows desktop app for batch resizing images across folders and subfolders. B
 
 ## Requirements
 
-- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8)
+- [.NET 8 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/8.0)
 - Windows 10 / 11 (WPF is Windows-only)
 - Visual Studio 2022, JetBrains Rider, or VS Code with the C# Dev Kit extension
 
 ## Building from source
 
-Requires [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8).
+Requires [.NET 8 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/8.0).
 
 ```bash
 git clone https://github.com/JezzWTF/resizer.git
