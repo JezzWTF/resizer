@@ -78,7 +78,7 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty] private string _filePrefix = "";
     [ObservableProperty] private string _fileSuffix = "";
     [ObservableProperty] private bool _skipExisting = true;
-    [ObservableProperty] private bool _skipLargerThanTarget = false;
+    [ObservableProperty] private bool _skipSmallerThanTarget = false;
 
     public bool ShowSubfolderName => OutputMode == OutputMode.Subfolder;
     public bool ShowCustomOutputFolder => OutputMode is OutputMode.CustomFolder or OutputMode.MirrorStructure;
@@ -234,19 +234,17 @@ public partial class MainViewModel : ObservableObject
                 ProgressTotal = p.Total;
                 ProgressPercent = p.PercentComplete;
                 CurrentFile = System.IO.Path.GetFileName(p.CurrentFile);
+
+                if (p.CompletedFile is { } fr)
+                    Log.Add(new LogEntryViewModel
+                    {
+                        Status = fr.Status,
+                        FilePath = fr.SourcePath,
+                        Message = fr.ErrorMessage,
+                    });
             });
 
             var result = await _processor.ProcessAsync(options, progress, _cts.Token);
-
-            foreach (var fr in result.FileResults.OrderBy(r => r.Status))
-            {
-                Log.Add(new LogEntryViewModel
-                {
-                    Status = fr.Status,
-                    FilePath = fr.SourcePath,
-                    Message = fr.ErrorMessage,
-                });
-            }
 
             var savings = result.TotalOriginalBytes > 0
                 ? $" | Saved {FormatBytes(result.TotalOriginalBytes - result.TotalOutputBytes)}"
@@ -345,9 +343,7 @@ public partial class MainViewModel : ObservableObject
         Recursive = Recursive,
         IncludedExtensions = BuildExtensionSet(),
         ResizeMode = ResizeMode,
-        Width = ResizeMode == Models.ResizeMode.LongestSide || ResizeMode == Models.ResizeMode.ShortestSide
-            ? TargetWidth
-            : TargetWidth,
+        Width = TargetWidth,
         Height = TargetHeight,
         Percentage = Percentage,
         OutputMode = OutputMode,
@@ -356,7 +352,7 @@ public partial class MainViewModel : ObservableObject
         FilePrefix = FilePrefix,
         FileSuffix = FileSuffix,
         SkipExisting = SkipExisting,
-        SkipLargerThanTarget = SkipLargerThanTarget,
+        SkipSmallerThanTarget = SkipSmallerThanTarget,
         OutputFormat = OutputFormat,
         JpegQuality = JpegQuality,
         WebPQuality = WebPQuality,
@@ -400,7 +396,7 @@ public partial class MainViewModel : ObservableObject
         FilePrefix = s.FilePrefix;
         FileSuffix = s.FileSuffix;
         SkipExisting = s.SkipExisting;
-        SkipLargerThanTarget = s.SkipLargerThanTarget;
+        SkipSmallerThanTarget = s.SkipSmallerThanTarget;
 
         OutputFormat = s.OutputFormat;
         JpegQuality = s.JpegQuality;
@@ -434,7 +430,7 @@ public partial class MainViewModel : ObservableObject
             FilePrefix = FilePrefix,
             FileSuffix = FileSuffix,
             SkipExisting = SkipExisting,
-            SkipLargerThanTarget = SkipLargerThanTarget,
+            SkipSmallerThanTarget = SkipSmallerThanTarget,
 
             OutputFormat = OutputFormat,
             JpegQuality = JpegQuality,

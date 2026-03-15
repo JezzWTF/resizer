@@ -37,6 +37,31 @@ To produce a self-contained single-file executable:
 dotnet publish src/BatchResizer/BatchResizer.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -o ./publish
 ```
 
+## Test data generation
+
+Use the placeholder generator to create a realistic nested photo library for resize and storage testing.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\generate-placeholder-images.ps1
+```
+
+What it prompts for:
+
+- destination folder
+- number of folders
+- images per folder
+- resolution preset (`Mixed 1080p + 4K`, `1080p`, `4K`, or custom)
+- output format (`jpg` or `png`)
+- target JPEG size in MB (approximate, when `jpg` is selected)
+
+Default test profile:
+
+- `Mixed 1080p + 4K` preset (70/30 split)
+- `jpg` output
+- target JPEG size `3.5 MB`
+
+This mode creates master images once, then copies them into the generated folder tree for fast dataset generation.
+
 ## Stack
 
 - .NET 8 / WPF

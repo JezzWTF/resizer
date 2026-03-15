@@ -61,6 +61,7 @@ public class ImageProcessingService
                             Skipped = progressState.Skipped,
                             Errors = progressState.Errors,
                             CurrentFile = capturedFile,
+                            CompletedFile = fileResult,
                         });
                     }
                 }
@@ -108,7 +109,7 @@ public class ImageProcessingService
 
             using var image = await Image.LoadAsync(sourcePath, ct).ConfigureAwait(false);
 
-            if (options.SkipLargerThanTarget && !ShouldResize(image.Width, image.Height, options))
+            if (options.SkipSmallerThanTarget && !ShouldResize(image.Width, image.Height, options))
             {
                 fileResult.Status = FileResultStatus.Skipped;
                 return fileResult;

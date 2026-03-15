@@ -9,14 +9,18 @@ public class FileDiscoveryService
     {
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var results = new List<string>();
-        var option = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
+        var enumOptions = new EnumerationOptions
+        {
+            IgnoreInaccessible = true,
+            RecurseSubdirectories = recursive,
+        };
 
         foreach (var folder in folders)
         {
             if (!Directory.Exists(folder))
                 continue;
 
-            foreach (var file in Directory.EnumerateFiles(folder, "*", option))
+            foreach (var file in Directory.EnumerateFiles(folder, "*", enumOptions))
             {
                 var ext = Path.GetExtension(file).ToLowerInvariant();
                 if (!extensions.Contains(ext))

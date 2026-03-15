@@ -25,7 +25,7 @@ public class AppSettings
     public string FilePrefix { get; set; } = "";
     public string FileSuffix { get; set; } = "";
     public bool SkipExisting { get; set; } = true;
-    public bool SkipLargerThanTarget { get; set; } = false;
+    public bool SkipSmallerThanTarget { get; set; } = false;
 
     // Format & quality
     public OutputFormat OutputFormat { get; set; } = OutputFormat.KeepOriginal;

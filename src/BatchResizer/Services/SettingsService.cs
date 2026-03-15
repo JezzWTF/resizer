@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
 using BatchResizer.Models;
@@ -26,8 +27,9 @@ public class SettingsService
             var json = File.ReadAllText(SettingsPath);
             return JsonSerializer.Deserialize<AppSettings>(json, JsonOptions) ?? new AppSettings();
         }
-        catch
+        catch (Exception ex)
         {
+            Debug.WriteLine($"[SettingsService] Failed to load settings: {ex}");
             return new AppSettings();
         }
     }
@@ -41,9 +43,9 @@ public class SettingsService
             var json = JsonSerializer.Serialize(settings, JsonOptions);
             File.WriteAllText(SettingsPath, json);
         }
-        catch
+        catch (Exception ex)
         {
-            // Settings save is best-effort; don't crash the app
+            Debug.WriteLine($"[SettingsService] Failed to save settings: {ex}");
         }
     }
 }
