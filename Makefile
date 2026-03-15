@@ -1,7 +1,7 @@
 PROJ := src/BatchResizer/BatchResizer.csproj
 PUBLISH_DIR := ./publish
 
-.PHONY: all build release publish run clean restore icon
+.PHONY: all build release publish run clean restore icon images
 
 all: build
 
@@ -43,3 +43,7 @@ icon:
 clean:
 	dotnet clean $(PROJ)
 	-powershell -NoProfile -Command "Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $(PUBLISH_DIR) 2>&1 | Out-Null"
+
+## Create placeholders
+images:
+	powershell -ExecutionPolicy Bypass -File ./scripts/generate-placeholder-images.ps1

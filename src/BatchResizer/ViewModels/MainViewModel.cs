@@ -1,5 +1,8 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
+using System.Windows.Data;
 using BatchResizer.Models;
 using BatchResizer.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -14,6 +17,7 @@ public partial class MainViewModel : ObservableObject
     private readonly FileDiscoveryService _discovery = new();
     private readonly SettingsService _settingsService = new();
     private CancellationTokenSource? _cts;
+    private readonly Stopwatch _processingStopwatch = new();
 
     public MainViewModel()
     {
@@ -23,6 +27,7 @@ public partial class MainViewModel : ObservableObject
     // ── Source Folders ──────────────────────────────────────────────────────
 
     public ObservableCollection<FolderItemViewModel> SourceFolders { get; } = [];
+    public ObservableCollection<string> RecentFolders { get; } = [];
 
     [ObservableProperty]
     private FolderItemViewModel? _selectedFolder;
@@ -126,11 +131,29 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty] private string _currentFile = "";
     [ObservableProperty] private string _statusMessage = "Add folders to get started.";
     [ObservableProperty] private int _scannedFileCount = -1;
+    [ObservableProperty] private string _processingSpeed = "";
+    [ObservableProperty] private string _processingEta = "";
+    [ObservableProperty] private bool _isDragOver;
 
     public bool CanStart => !IsProcessing && SourceFolders.Count > 0;
     public bool IsIdle => !IsProcessing;
 
     public ObservableCollection<LogEntryViewModel> Log { get; } = [];
+
+    private ICollectionView? _logView;
+    public ICollectionView LogView => _logView ??= CreateLogView();
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsFilterAll))]
+    [NotifyPropertyChangedFor(nameof(IsFilterErrors))]
+    [NotifyPropertyChangedFor(nameof(IsFilterSkipped))]
+    private LogFilter _activeLogFilter = LogFilter.All;
+
+    public bool IsFilterAll    => ActiveLogFilter == LogFilter.All;
+    public bool IsFilterErrors => ActiveLogFilter == LogFilter.Errors;
+    public bool IsFilterSkipped => ActiveLogFilter == LogFilter.Skipped;
+
+    partial void OnActiveLogFilterChanged(LogFilter value) => _logView?.Refresh();
 
     // ── Commands ────────────────────────────────────────────────────────────
 
@@ -221,7 +244,10 @@ public partial class MainViewModel : ObservableObject
         ProgressSkipped = 0;
         ProgressErrors = 0;
         ProgressPercent = 0;
+        ProcessingSpeed = "";
+        ProcessingEta = "";
         StatusMessage = "Processing...";
+        _processingStopwatch.Restart();
 
         try
         {
@@ -236,6 +262,19 @@ public partial class MainViewModel : ObservableObject
                 ProgressTotal = p.Total;
                 ProgressPercent = p.PercentComplete;
                 CurrentFile = System.IO.Path.GetFileName(p.CurrentFile);
+
+                var elapsed = _processingStopwatch.Elapsed.TotalSeconds;
+                var done = p.Processed + p.Skipped + p.Errors;
+                if (elapsed > 1.0 && done > 0)
+                {
+                    double imgPerSec = done / elapsed;
+                    int remaining = p.Total - done;
+                    double etaSecs = remaining / imgPerSec;
+                    ProcessingSpeed = $"{imgPerSec:F1} img/s";
+                    ProcessingEta = etaSecs < 60
+                        ? $"~{(int)etaSecs}s remaining"
+                        : $"~{(int)(etaSecs / 60)}m remaining";
+                }
 
                 if (p.CompletedFile is { } fr)
                     Log.Add(new LogEntryViewModel
@@ -252,9 +291,15 @@ public partial class MainViewModel : ObservableObject
                 ? $" | Saved {FormatBytes(result.TotalOriginalBytes - result.TotalOutputBytes)}"
                 : "";
 
-            StatusMessage = result.WasCancelled
-                ? $"Cancelled. {result.TotalProcessed} done, {result.TotalSkipped} skipped, {result.TotalErrors} errors."
-                : $"Done in {result.Duration.TotalSeconds:F1}s — {result.TotalProcessed} resized, {result.TotalSkipped} skipped, {result.TotalErrors} errors{savings}.";
+            if (result.WasCancelled)
+            {
+                StatusMessage = $"Cancelled. {result.TotalProcessed} done, {result.TotalSkipped} skipped, {result.TotalErrors} errors.";
+            }
+            else
+            {
+                StatusMessage = $"Done in {result.Duration.TotalSeconds:F1}s — {result.TotalProcessed} resized, {result.TotalSkipped} skipped, {result.TotalErrors} errors{savings}.";
+                ToastNotificationService.ShowBatchComplete(result.TotalProcessed, result.TotalSkipped, result.TotalErrors, result.Duration);
+            }
         }
         catch (Exception ex)
         {
@@ -263,6 +308,9 @@ public partial class MainViewModel : ObservableObject
         finally
         {
             IsProcessing = false;
+            _processingStopwatch.Stop();
+            ProcessingSpeed = "";
+            ProcessingEta = "";
             _cts.Dispose();
             _cts = null;
         }
@@ -274,6 +322,12 @@ public partial class MainViewModel : ObservableObject
         _cts?.Cancel();
         StatusMessage = "Cancelling...";
     }
+
+    [RelayCommand]
+    private void SetLogFilter(LogFilter filter) => ActiveLogFilter = filter;
+
+    [RelayCommand]
+    private void AddRecentFolder(string path) => AddFolderPath(path);
 
     [RelayCommand]
     private void OnPresetSelected()
@@ -303,9 +357,19 @@ public partial class MainViewModel : ObservableObject
             return;
 
         SourceFolders.Add(new FolderItemViewModel { Path = path });
+        RecordRecentFolder(path);
         ScannedFileCount = -1;
         StartResizingCommand.NotifyCanExecuteChanged();
         UpdateStatusMessage();
+    }
+
+    private void RecordRecentFolder(string path)
+    {
+        var existing = RecentFolders.FirstOrDefault(r => r.Equals(path, StringComparison.OrdinalIgnoreCase));
+        if (existing != null) RecentFolders.Remove(existing);
+        RecentFolders.Insert(0, path);
+        while (RecentFolders.Count > 10)
+            RecentFolders.RemoveAt(RecentFolders.Count - 1);
     }
 
     private void UpdateStatusMessage()
@@ -363,6 +427,18 @@ public partial class MainViewModel : ObservableObject
         MaxParallelism = Math.Max(1, Environment.ProcessorCount / 2),
     };
 
+    private ICollectionView CreateLogView()
+    {
+        var view = CollectionViewSource.GetDefaultView(Log);
+        view.Filter = obj => obj is LogEntryViewModel e && ActiveLogFilter switch
+        {
+            LogFilter.Errors  => e.Status == FileResultStatus.Error,
+            LogFilter.Skipped => e.Status == FileResultStatus.Skipped,
+            _                 => true,
+        };
+        return view;
+    }
+
     private static string FormatBytes(long bytes) => bytes switch
     {
         < 1024 => $"{bytes} B",
@@ -407,6 +483,10 @@ public partial class MainViewModel : ObservableObject
 
         PreserveTimestamps = s.PreserveTimestamps;
         MetadataMode = s.MetadataMode;
+
+        RecentFolders.Clear();
+        foreach (var f in s.RecentFolders)
+            RecentFolders.Add(f);
     }
 
     public void SaveSettings()
@@ -441,6 +521,7 @@ public partial class MainViewModel : ObservableObject
 
             PreserveTimestamps = PreserveTimestamps,
             MetadataMode = MetadataMode,
+            RecentFolders = RecentFolders.ToList(),
         });
     }
 }

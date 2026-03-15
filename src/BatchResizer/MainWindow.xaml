@@ -64,8 +64,22 @@
 
                     <!-- Source Folders -->
                     <TextBlock Text="SOURCE FOLDERS" Style="{StaticResource SectionHeader}"/>
-                    <Border Background="#2D2D30" BorderBrush="#3F3F46" BorderThickness="1"
-                            CornerRadius="4" MinHeight="120" MaxHeight="180">
+                    <Border x:Name="FolderDropBorder"
+                            CornerRadius="4" MinHeight="120" MaxHeight="180" AllowDrop="True">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="Background"      Value="#2D2D30"/>
+                                <Setter Property="BorderBrush"     Value="#3F3F46"/>
+                                <Setter Property="BorderThickness" Value="1"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsDragOver}" Value="True">
+                                        <Setter Property="Background"      Value="#1A2D3D"/>
+                                        <Setter Property="BorderBrush"     Value="#0078D4"/>
+                                        <Setter Property="BorderThickness" Value="2"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
                         <Grid>
                             <ListBox x:Name="FolderListBox"
                                      ItemsSource="{Binding SourceFolders}"
@@ -113,8 +127,19 @@
                     </Border>
 
                     <WrapPanel Margin="0,6,0,0">
-                        <Button Content="+ Add Folder" Command="{Binding AddFolderCommand}"
-                                Style="{StaticResource SecondaryButton}" Padding="12,6" Margin="0,0,6,0"/>
+                        <Grid Margin="0,0,6,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="22"/>
+                            </Grid.ColumnDefinitions>
+                            <Button Grid.Column="0" Content="+ Add Folder"
+                                    Command="{Binding AddFolderCommand}"
+                                    Style="{StaticResource SecondaryButton}" Padding="12,6"/>
+                            <Button Grid.Column="1" Content="▾" FontSize="10"
+                                    Style="{StaticResource SecondaryButton}" Padding="0,6"
+                                    x:Name="RecentFoldersDropdownButton"
+                                    Click="OnRecentFoldersDropdownClick"/>
+                        </Grid>
                         <Button Content="Remove" Command="{Binding RemoveFolderCommand}"
                                 Style="{StaticResource SecondaryButton}" Padding="12,6" Margin="0,0,6,0"/>
                         <Button Content="Clear All" Command="{Binding ClearFoldersCommand}"
@@ -432,10 +457,17 @@
                 <StackPanel Grid.Row="1" Margin="20,14,20,8"
                             Visibility="{Binding IsProcessing, Converter={StaticResource BoolToVis}}">
                     <Grid Margin="0,0,0,6">
-                        <TextBlock Text="{Binding CurrentFile}" Foreground="#9D9D9D" FontSize="11"
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="{Binding CurrentFile}" Foreground="#9D9D9D" FontSize="11"
                                    TextTrimming="CharacterEllipsis"/>
-                        <TextBlock HorizontalAlignment="Right" Foreground="#9D9D9D" FontSize="11"
-                                   Text="{Binding ProgressPercent, StringFormat={}{0:F0}%}"/>
+                        <TextBlock Grid.Column="1" Foreground="#9D9D9D" FontSize="11" Margin="8,0"
+                                   Text="{Binding ProcessingSpeed}"/>
+                        <TextBlock Grid.Column="2" Foreground="#9D9D9D" FontSize="11"
+                                   Text="{Binding ProcessingEta}"/>
                     </Grid>
                     <ProgressBar Value="{Binding ProgressPercent}" Maximum="100" Height="6"/>
                 </StackPanel>
@@ -450,6 +482,7 @@
                 <Grid Grid.Row="2" Margin="20,8,20,16">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
                     <Grid Grid.Row="0" Margin="0,0,0,8">
@@ -458,8 +491,52 @@
                                    VerticalAlignment="Center"
                                    Text="{Binding Log.Count, StringFormat={}{0} entries}"/>
                     </Grid>
-                    <ListBox Grid.Row="1"
-                             ItemsSource="{Binding Log}"
+                    <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8">
+                        <Button Command="{Binding SetLogFilterCommand}"
+                                CommandParameter="{x:Static models:LogFilter.All}"
+                                Content="All" Padding="10,3" Margin="0,0,4,0">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsFilterAll}" Value="True">
+                                            <Setter Property="Background" Value="#0078D4"/>
+                                            <Setter Property="Foreground" Value="White"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                        <Button Command="{Binding SetLogFilterCommand}"
+                                CommandParameter="{x:Static models:LogFilter.Errors}"
+                                Content="Errors" Padding="10,3" Margin="0,0,4,0">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsFilterErrors}" Value="True">
+                                            <Setter Property="Background" Value="#0078D4"/>
+                                            <Setter Property="Foreground" Value="White"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                        <Button Command="{Binding SetLogFilterCommand}"
+                                CommandParameter="{x:Static models:LogFilter.Skipped}"
+                                Content="Skipped" Padding="10,3">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsFilterSkipped}" Value="True">
+                                            <Setter Property="Background" Value="#0078D4"/>
+                                            <Setter Property="Foreground" Value="White"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                    </StackPanel>
+                    <ListBox Grid.Row="2"
+                             ItemsSource="{Binding LogView}"
                              Background="#1A1A1A"
                              BorderBrush="#2D2D30"
                              ScrollViewer.HorizontalScrollBarVisibility="Disabled"
@@ -487,7 +564,7 @@
                         </ListBox.ItemTemplate>
                     </ListBox>
 
-                    <TextBlock Grid.Row="1"
+                    <TextBlock Grid.Row="2"
                                Text="Processing results will appear here."
                                Foreground="#444444" FontSize="13" TextAlignment="Center"
                                HorizontalAlignment="Center" VerticalAlignment="Center"

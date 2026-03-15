@@ -35,4 +35,7 @@ public class AppSettings
     // Metadata
     public bool PreserveTimestamps { get; set; } = true;
     public MetadataMode MetadataMode { get; set; } = MetadataMode.PreserveAll;
+
+    // Recent folders
+    public List<string> RecentFolders { get; set; } = [];
 }
