@@ -300,7 +300,7 @@ public class ImageProcessingService
         OutputFormat.Png => ".png",
         OutputFormat.WebP => ".webp",
         OutputFormat.Bmp => ".bmp",
-        _ => throw new ArgumentOutOfRangeException(nameof(format)),
+        _ => ".jpg",
     };
 
     private static IImageEncoder GetEncoder(string sourcePath, Opts options)
