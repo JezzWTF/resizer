@@ -15,9 +15,24 @@ public partial class MainWindow : Window
         _vm = new MainViewModel();
         DataContext = _vm;
 
-        Drop += OnWindowDrop;
-        DragOver += OnWindowDragOver;
         Closing += (_, _) => _vm.SaveSettings();
+
+        // handledEventsToo: true ensures these fire even if a child element marks the event handled
+        RootGrid.AddHandler(UIElement.DragOverEvent, new DragEventHandler((_, e) =>
+        {
+            e.Effects = e.Data.GetDataPresent(DataFormats.FileDrop)
+                ? DragDropEffects.Copy
+                : DragDropEffects.None;
+            e.Handled = true;
+        }), handledEventsToo: true);
+
+        RootGrid.AddHandler(UIElement.DropEvent, new DragEventHandler((_, e) =>
+        {
+            _vm.IsDragOver = false;
+            if (e.Data.GetData(DataFormats.FileDrop) is string[] paths)
+                _vm.HandleDroppedPaths(paths);
+            e.Handled = true;
+        }), handledEventsToo: true);
 
         FolderDropBorder.DragEnter += (_, e) =>
         {
@@ -25,33 +40,6 @@ public partial class MainWindow : Window
                 _vm.IsDragOver = true;
         };
         FolderDropBorder.DragLeave += (_, _) => _vm.IsDragOver = false;
-        FolderDropBorder.Drop += (_, e) =>
-        {
-            _vm.IsDragOver = false;
-            if (e.Data.GetData(DataFormats.FileDrop) is string[] paths)
-                _vm.HandleDroppedPaths(paths);
-            e.Handled = true;
-        };
-        FolderDropBorder.DragOver += (_, e) =>
-        {
-            e.Effects = e.Data.GetDataPresent(DataFormats.FileDrop)
-                ? DragDropEffects.Copy : DragDropEffects.None;
-            e.Handled = true;
-        };
-    }
-
-    private void OnWindowDragOver(object sender, DragEventArgs e)
-    {
-        e.Effects = e.Data.GetDataPresent(DataFormats.FileDrop)
-            ? DragDropEffects.Copy
-            : DragDropEffects.None;
-        e.Handled = true;
-    }
-
-    private void OnWindowDrop(object sender, DragEventArgs e)
-    {
-        if (e.Data.GetData(DataFormats.FileDrop) is string[] paths)
-            _vm.HandleDroppedPaths(paths);
     }
 
     private void OnRecentFoldersDropdownClick(object sender, RoutedEventArgs e)

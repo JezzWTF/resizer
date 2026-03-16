@@ -27,7 +27,7 @@
         </ResourceDictionary>
     </Window.Resources>
 
-    <Grid>
+    <Grid x:Name="RootGrid" AllowDrop="True">
         <Grid.RowDefinitions>
             <RowDefinition Height="52"/>
             <RowDefinition Height="*"/>
@@ -58,6 +58,7 @@
             <!-- LEFT PANEL: Settings -->
             <ScrollViewer Grid.Column="0"
                           Background="#252526"
+                          AllowDrop="True"
                           VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled">
                 <StackPanel Margin="16,12,16,16">
@@ -85,8 +86,7 @@
                                      ItemsSource="{Binding SourceFolders}"
                                      SelectedItem="{Binding SelectedFolder}"
                                      Background="Transparent"
-                                     BorderThickness="0"
-                                     AllowDrop="True">
+                                     BorderThickness="0">
                                 <ListBox.ItemTemplate>
                                     <DataTemplate DataType="{x:Type vm:FolderItemViewModel}">
                                         <Grid>
@@ -586,7 +586,17 @@
         </Grid>
 
         <!-- Status Bar -->
-        <Border Grid.Row="2" Background="#007ACC" Padding="16,0">
+        <Border Grid.Row="2" Padding="16,0">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Setter Property="Background" Value="#007ACC"/>
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsComplete}" Value="True">
+                            <Setter Property="Background" Value="#2E7D32"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
             <TextBlock Text="{Binding StatusMessage}"
                        Foreground="White" FontSize="12"
                        VerticalAlignment="Center"

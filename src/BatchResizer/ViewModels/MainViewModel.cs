@@ -18,6 +18,7 @@ public partial class MainViewModel : ObservableObject
     private readonly SettingsService _settingsService = new();
     private CancellationTokenSource? _cts;
     private readonly Stopwatch _processingStopwatch = new();
+    private readonly Queue<DateTime> _completionTimestamps = new();
 
     public MainViewModel()
     {
@@ -134,6 +135,7 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty] private string _processingSpeed = "";
     [ObservableProperty] private string _processingEta = "";
     [ObservableProperty] private bool _isDragOver;
+    [ObservableProperty] private bool _isComplete;
 
     public bool CanStart => !IsProcessing && SourceFolders.Count > 0;
     public bool IsIdle => !IsProcessing;
@@ -238,6 +240,7 @@ public partial class MainViewModel : ObservableObject
     private async Task StartResizing()
     {
         Log.Clear();
+        IsComplete = false;
         _cts = new CancellationTokenSource();
         IsProcessing = true;
         ProgressProcessed = 0;
@@ -248,6 +251,7 @@ public partial class MainViewModel : ObservableObject
         ProcessingEta = "";
         StatusMessage = "Processing...";
         _processingStopwatch.Restart();
+        _completionTimestamps.Clear();
 
         try
         {
@@ -263,17 +267,25 @@ public partial class MainViewModel : ObservableObject
                 ProgressPercent = p.PercentComplete;
                 CurrentFile = System.IO.Path.GetFileName(p.CurrentFile);
 
-                var elapsed = _processingStopwatch.Elapsed.TotalSeconds;
-                var done = p.Processed + p.Skipped + p.Errors;
-                if (elapsed > 1.0 && done > 0)
+                var now = DateTime.UtcNow;
+                _completionTimestamps.Enqueue(now);
+                var windowStart = now.AddSeconds(-5);
+                while (_completionTimestamps.Count > 0 && _completionTimestamps.Peek() < windowStart)
+                    _completionTimestamps.Dequeue();
+
+                int remaining = p.Total - (p.Processed + p.Skipped + p.Errors);
+                if (_completionTimestamps.Count >= 2)
                 {
-                    double imgPerSec = done / elapsed;
-                    int remaining = p.Total - done;
-                    double etaSecs = remaining / imgPerSec;
-                    ProcessingSpeed = $"{imgPerSec:F1} img/s";
-                    ProcessingEta = etaSecs < 60
-                        ? $"~{(int)etaSecs}s remaining"
-                        : $"~{(int)(etaSecs / 60)}m remaining";
+                    double windowSecs = (now - _completionTimestamps.Peek()).TotalSeconds;
+                    double imgPerSec = windowSecs > 0 ? _completionTimestamps.Count / windowSecs : 0;
+                    if (imgPerSec > 0)
+                    {
+                        double etaSecs = remaining / imgPerSec;
+                        ProcessingSpeed = $"{imgPerSec:F1} img/s";
+                        ProcessingEta = etaSecs < 60
+                            ? $"~{(int)etaSecs}s remaining"
+                            : $"~{(int)(etaSecs / 60)}m {(int)(etaSecs % 60)}s remaining";
+                    }
                 }
 
                 if (p.CompletedFile is { } fr)
@@ -298,7 +310,7 @@ public partial class MainViewModel : ObservableObject
             else
             {
                 StatusMessage = $"Done in {result.Duration.TotalSeconds:F1}s — {result.TotalProcessed} resized, {result.TotalSkipped} skipped, {result.TotalErrors} errors{savings}.";
-                ToastNotificationService.ShowBatchComplete(result.TotalProcessed, result.TotalSkipped, result.TotalErrors, result.Duration);
+                IsComplete = true;
             }
         }
         catch (Exception ex)
