@@ -1,6 +1,8 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Interop;
+using System.Runtime.InteropServices;
 using BatchResizer.ViewModels;
 
 namespace BatchResizer;
@@ -14,6 +16,8 @@ public partial class MainWindow : Window
         InitializeComponent();
         _vm = new MainViewModel();
         DataContext = _vm;
+
+        SourceInitialized += (_, _) => EnableDarkTitleBar();
 
         Closing += (_, _) => _vm.SaveSettings();
 
@@ -41,6 +45,34 @@ public partial class MainWindow : Window
         };
         FolderDropBorder.DragLeave += (_, _) => _vm.IsDragOver = false;
     }
+
+    private void EnableDarkTitleBar()
+    {
+        var handle = new WindowInteropHelper(this).Handle;
+        if (handle == IntPtr.Zero)
+            return;
+
+        const int DwmwaUseImmersiveDarkMode = 20;
+        const int DwmwaUseImmersiveDarkModeLegacy = 19;
+        const int DwmwaCaptionColor = 35;
+        const int DwmwaTextColor = 36;
+        int enabled = 1;
+        uint captionColor = 0x00252625;
+        uint textColor = 0x00F0F0F0;
+
+        int result = DwmSetWindowAttribute(handle, DwmwaUseImmersiveDarkMode, ref enabled, sizeof(int));
+        if (result != 0)
+            _ = DwmSetWindowAttribute(handle, DwmwaUseImmersiveDarkModeLegacy, ref enabled, sizeof(int));
+
+        _ = DwmSetWindowAttribute(handle, DwmwaCaptionColor, ref captionColor, sizeof(uint));
+        _ = DwmSetWindowAttribute(handle, DwmwaTextColor, ref textColor, sizeof(uint));
+    }
+
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int pvAttribute, int cbAttribute);
+
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref uint pvAttribute, int cbAttribute);
 
     private void OnRecentFoldersDropdownClick(object sender, RoutedEventArgs e)
     {

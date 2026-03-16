@@ -309,7 +309,7 @@ public partial class MainViewModel : ObservableObject
             }
             else
             {
-                StatusMessage = $"Done in {result.Duration.TotalSeconds:F1}s — {result.TotalProcessed} resized, {result.TotalSkipped} skipped, {result.TotalErrors} errors{savings}.";
+                StatusMessage = $"Done in {FormatDuration(result.Duration)} — {result.TotalProcessed} resized, {result.TotalSkipped} skipped, {result.TotalErrors} errors{savings}.";
                 IsComplete = true;
             }
         }
@@ -458,6 +458,17 @@ public partial class MainViewModel : ObservableObject
         < 1024L * 1024 * 1024 => $"{bytes / (1024.0 * 1024):F1} MB",
         _ => $"{bytes / (1024.0 * 1024 * 1024):F1} GB",
     };
+
+    private static string FormatDuration(TimeSpan duration)
+    {
+        if (duration.TotalHours >= 1)
+            return $"{(int)duration.TotalHours}h {duration.Minutes}m {duration.Seconds}.{duration.Milliseconds / 100}s";
+
+        if (duration.TotalMinutes >= 1)
+            return $"{duration.Minutes}m {duration.Seconds}.{duration.Milliseconds / 100}s";
+
+        return $"{duration.TotalSeconds:F1}s";
+    }
 
     // ── Settings persistence ─────────────────────────────────────────────────
 
