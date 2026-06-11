@@ -8,6 +8,7 @@ public class FileResult
     public string? OutputPath { get; set; }
     public FileResultStatus Status { get; set; }
     public string? ErrorMessage { get; set; }
+    public string? WarningMessage { get; set; }
     public long OriginalBytes { get; set; }
     public long OutputBytes { get; set; }
 }

@@ -26,52 +26,72 @@ public class ImageProcessingService
         CancellationToken ct)
     {
         var startTime = DateTime.UtcNow;
-        var files = _discovery.DiscoverFiles(options.SourceFolders, options.Recursive, options.IncludedExtensions);
         var result = new ProcessingResult();
-        var progressState = new ProcessingProgress { Total = files.Count };
+        IReadOnlyList<string> files;
+        try
+        {
+            files = _discovery.DiscoverFiles(
+                options.SourceFolders, options.Recursive, options.IncludedExtensions, ct);
+        }
+        catch (OperationCanceledException)
+        {
+            result.WasCancelled = true;
+            result.Duration = DateTime.UtcNow - startTime;
+            return result;
+        }
 
-        var semaphore = new SemaphoreSlim(options.MaxParallelism, options.MaxParallelism);
+        var progressState = new ProcessingProgress { Total = files.Count };
+        var parallelismLimit = Math.Max(1, Environment.ProcessorCount * 2);
+        var maxParallelism = Math.Clamp(options.MaxParallelism, 1, parallelismLimit);
+
+        using var semaphore = new SemaphoreSlim(maxParallelism, maxParallelism);
         var tasks = new List<Task>();
         var resultsLock = new object();
 
-        foreach (var file in files)
+        try
         {
-            if (ct.IsCancellationRequested) break;
-
-            await semaphore.WaitAsync(ct).ConfigureAwait(false);
-
-            var capturedFile = file;
-            tasks.Add(Task.Run(async () =>
+            foreach (var file in files)
             {
-                try
+                ct.ThrowIfCancellationRequested();
+                await semaphore.WaitAsync(ct).ConfigureAwait(false);
+
+                var capturedFile = file;
+                tasks.Add(Task.Run(async () =>
                 {
-                    var fileResult = await ProcessFileAsync(capturedFile, options, ct).ConfigureAwait(false);
-                    lock (resultsLock)
+                    try
                     {
-                        result.FileResults.Add(fileResult);
-                        progressState.CurrentFile = capturedFile;
-                        switch (fileResult.Status)
+                        var fileResult = await ProcessFileAsync(capturedFile, options, ct).ConfigureAwait(false);
+                        lock (resultsLock)
                         {
-                            case FileResultStatus.Success: progressState.Processed++; break;
-                            case FileResultStatus.Skipped: progressState.Skipped++; break;
-                            case FileResultStatus.Error: progressState.Errors++; break;
+                            result.FileResults.Add(fileResult);
+                            progressState.CurrentFile = capturedFile;
+                            switch (fileResult.Status)
+                            {
+                                case FileResultStatus.Success: progressState.Processed++; break;
+                                case FileResultStatus.Skipped: progressState.Skipped++; break;
+                                case FileResultStatus.Error: progressState.Errors++; break;
+                            }
+                            progress.Report(new ProcessingProgress
+                            {
+                                Total = progressState.Total,
+                                Processed = progressState.Processed,
+                                Skipped = progressState.Skipped,
+                                Errors = progressState.Errors,
+                                CurrentFile = capturedFile,
+                                CompletedFile = fileResult,
+                            });
                         }
-                        progress.Report(new ProcessingProgress
-                        {
-                            Total = progressState.Total,
-                            Processed = progressState.Processed,
-                            Skipped = progressState.Skipped,
-                            Errors = progressState.Errors,
-                            CurrentFile = capturedFile,
-                            CompletedFile = fileResult,
-                        });
                     }
-                }
-                finally
-                {
-                    semaphore.Release();
-                }
-            }, ct));
+                    finally
+                    {
+                        semaphore.Release();
+                    }
+                }, ct));
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            result.WasCancelled = true;
         }
 
         try
@@ -91,15 +111,16 @@ public class ImageProcessingService
     {
         var fileResult = new FileResult { SourcePath = sourcePath };
 
-        if (!Path.IsPathFullyQualified(sourcePath) || sourcePath.Contains(".."))
-        {
-            fileResult.Status = FileResultStatus.Error;
-            fileResult.ErrorMessage = "Invalid source path.";
-            return fileResult;
-        }
-
         try
         {
+            if (!Path.IsPathFullyQualified(sourcePath))
+                throw new InvalidOperationException("The source path must be fully qualified.");
+
+            sourcePath = Path.GetFullPath(sourcePath);
+            fileResult.SourcePath = sourcePath;
+            if (!options.SourceFolders.Any(root => IsPathWithinRoot(sourcePath, root)))
+                throw new InvalidOperationException("The source path is outside the selected source folders.");
+
             var outputPath = BuildOutputPath(sourcePath, options);
             fileResult.OutputPath = outputPath;
 
@@ -109,29 +130,52 @@ public class ImageProcessingService
                 return fileResult;
             }
 
-            var dir = Path.GetDirectoryName(outputPath);
-            if (!string.IsNullOrEmpty(dir))
-                Directory.CreateDirectory(dir);
-
             var sourceInfo = new FileInfo(sourcePath);
+            if (!sourceInfo.Exists)
+                throw new FileNotFoundException("The source file no longer exists.", sourcePath);
+
             fileResult.OriginalBytes = sourceInfo.Length;
+            if (sourceInfo.Length > options.MaxInputFileSizeBytes)
+                throw new InvalidOperationException(
+                    $"File exceeds the {FormatMegabytes(options.MaxInputFileSizeBytes)} MB input size limit.");
 
-            using var image = await Image.LoadAsync(sourcePath, ct).ConfigureAwait(false);
+            var imageInfo = await Image.IdentifyAsync(sourcePath, ct).ConfigureAwait(false)
+                ?? throw new InvalidOperationException("The image format could not be identified.");
+            if ((long)imageInfo.Width * imageInfo.Height > options.MaxInputPixels)
+                throw new InvalidOperationException(
+                    $"Image exceeds the {options.MaxInputPixels:N0}-pixel safety limit.");
 
-            if (options.SkipSmallerThanTarget && !ShouldResize(image.Width, image.Height, options))
+            if (options.SkipSmallerThanTarget && !ShouldResize(imageInfo.Width, imageInfo.Height, options))
             {
                 fileResult.Status = FileResultStatus.Skipped;
                 return fileResult;
             }
 
+            using var image = await Image.LoadAsync(sourcePath, ct).ConfigureAwait(false);
+
             ApplyResize(image, options);
             ApplyMetadataMode(image, options.MetadataMode);
 
+            var dir = Path.GetDirectoryName(outputPath);
+            if (!string.IsNullOrEmpty(dir))
+                Directory.CreateDirectory(dir);
+
             var encoder = GetEncoder(sourcePath, options);
-            await image.SaveAsync(outputPath, encoder, ct).ConfigureAwait(false);
+            try
+            {
+                await image.SaveAsync(outputPath, encoder, ct).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                if (!string.Equals(outputPath, sourcePath, StringComparison.OrdinalIgnoreCase))
+                {
+                    try { File.Delete(outputPath); } catch { /* best-effort cleanup of partial write */ }
+                }
+                throw;
+            }
 
             if (options.PreserveTimestamps)
-                CopyTimestamps(sourceInfo, outputPath);
+                fileResult.WarningMessage = CopyTimestamps(sourceInfo, outputPath);
 
             fileResult.OutputBytes = new FileInfo(outputPath).Length;
             fileResult.Status = FileResultStatus.Success;
@@ -239,16 +283,17 @@ public class ImageProcessingService
         }
     }
 
-    private static void CopyTimestamps(FileInfo source, string outputPath)
+    private static string? CopyTimestamps(FileInfo source, string outputPath)
     {
         try
         {
             File.SetCreationTime(outputPath, source.CreationTime);
             File.SetLastWriteTime(outputPath, source.LastWriteTime);
+            return null;
         }
-        catch
+        catch (Exception ex)
         {
-            // Non-critical — some file systems don't support timestamp writes
+            return $"Resized, but timestamps could not be preserved: {ex.Message}";
         }
     }
 
@@ -259,42 +304,79 @@ public class ImageProcessingService
         var ext = options.OutputFormat == OutputFormat.KeepOriginal
             ? Path.GetExtension(sourcePath)
             : GetExtensionForFormat(options.OutputFormat);
-
         var outFileName = $"{options.FilePrefix}{fileName}{options.FileSuffix}{ext}";
 
-        return options.OutputMode switch
+        string outputRoot;
+        string outputPath;
+        switch (options.OutputMode)
         {
-            OutputMode.InPlace => Path.Combine(sourceDir, outFileName),
-            OutputMode.Subfolder => Path.Combine(sourceDir, options.SubfolderName, outFileName),
-            OutputMode.CustomFolder => Path.Combine(options.CustomOutputFolder, outFileName),
-            OutputMode.MirrorStructure => BuildMirroredPath(sourcePath, options, outFileName),
-            _ => Path.Combine(sourceDir, outFileName),
-        };
-    }
-
-    private static string BuildMirroredPath(string sourcePath, Opts options, string outFileName)
-    {
-        if (string.IsNullOrEmpty(options.CustomOutputFolder))
-            return Path.Combine(Path.GetDirectoryName(sourcePath)!, outFileName);
-
-        var sourceDir = Path.GetDirectoryName(sourcePath)!;
-
-        string? commonBase = null;
-        foreach (var folder in options.SourceFolders)
-        {
-            if (sourceDir.StartsWith(folder, StringComparison.OrdinalIgnoreCase))
-            {
-                if (commonBase == null || folder.Length > commonBase.Length)
-                    commonBase = folder;
-            }
+            case OutputMode.InPlace:
+                outputRoot = sourceDir;
+                outputPath = Path.Combine(outputRoot, outFileName);
+                break;
+            case OutputMode.Subfolder:
+                outputRoot = Path.Combine(sourceDir, options.SubfolderName);
+                outputPath = Path.Combine(outputRoot, outFileName);
+                break;
+            case OutputMode.CustomFolder:
+                outputRoot = options.CustomOutputFolder;
+                outputPath = Path.Combine(outputRoot, outFileName);
+                break;
+            case OutputMode.MirrorStructure:
+                outputRoot = options.CustomOutputFolder;
+                outputPath = BuildMirroredPath(sourcePath, options, outputRoot, outFileName);
+                break;
+            default:
+                throw new InvalidOperationException("Unsupported output mode.");
         }
 
-        if (commonBase == null)
-            return Path.Combine(options.CustomOutputFolder, outFileName);
+        var normalizedRoot = Path.GetFullPath(outputRoot);
+        var normalizedOutput = Path.GetFullPath(outputPath);
+        if (!IsPathWithinRoot(normalizedOutput, normalizedRoot))
+            throw new InvalidOperationException("The resolved output path is outside the selected output folder.");
 
-        var relative = Path.GetRelativePath(commonBase, sourceDir);
-        return Path.Combine(options.CustomOutputFolder, relative, outFileName);
+        return normalizedOutput;
     }
+
+    private static string BuildMirroredPath(
+        string sourcePath,
+        Opts options,
+        string outputRoot,
+        string outFileName)
+    {
+        var sourceDir = Path.GetDirectoryName(sourcePath)!;
+        var sourceRoot = options.SourceFolders
+            .Where(folder => IsPathWithinRoot(sourcePath, folder))
+            .OrderByDescending(folder => Path.GetFullPath(folder).Length)
+            .FirstOrDefault();
+
+        if (sourceRoot == null)
+            throw new InvalidOperationException("The source path is outside the selected source folders.");
+
+        var relative = Path.GetRelativePath(Path.GetFullPath(sourceRoot), sourceDir);
+        return Path.Combine(outputRoot, relative, outFileName);
+    }
+
+    private static bool IsPathWithinRoot(string candidatePath, string rootPath)
+    {
+        if (!Path.IsPathFullyQualified(rootPath))
+            return false;
+
+        try
+        {
+            var relative = Path.GetRelativePath(Path.GetFullPath(rootPath), Path.GetFullPath(candidatePath));
+            return relative != ".." &&
+                   !relative.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal) &&
+                   !relative.StartsWith($"..{Path.AltDirectorySeparatorChar}", StringComparison.Ordinal) &&
+                   !Path.IsPathFullyQualified(relative);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return false;
+        }
+    }
+
+    private static long FormatMegabytes(long bytes) => bytes / (1024 * 1024);
 
     private static string GetExtensionForFormat(OutputFormat format) => format switch
     {

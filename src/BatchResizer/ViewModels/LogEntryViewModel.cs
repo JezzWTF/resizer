@@ -22,6 +22,7 @@ public partial class LogEntryViewModel : ObservableObject
     {
         FileResultStatus.Error => $"{Path.GetFileName(FilePath)} — {Message}",
         FileResultStatus.Skipped => $"{Path.GetFileName(FilePath)} (skipped)",
+        _ when !string.IsNullOrWhiteSpace(Message) => $"{Path.GetFileName(FilePath)} — {Message}",
         _ => Path.GetFileName(FilePath),
     };
 }

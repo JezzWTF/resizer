@@ -2,6 +2,10 @@ namespace BatchResizer.Models;
 
 public class AppSettings
 {
+    public const int MaxDimension = 100_000;
+    public const double MinPercentage = 0.1;
+    public const double MaxPercentage = 1_000;
+    public const int MaxRecentFolders = 10;
     // File filters
     public bool Recursive { get; set; } = true;
     public bool IncludeJpeg { get; set; } = true;

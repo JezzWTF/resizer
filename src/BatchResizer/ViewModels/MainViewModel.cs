@@ -15,13 +15,14 @@ public partial class MainViewModel : ObservableObject
 {
     private readonly ImageProcessingService _processor = new();
     private readonly FileDiscoveryService _discovery = new();
-    private readonly SettingsService _settingsService = new();
+    private readonly SettingsService _settingsService;
     private CancellationTokenSource? _cts;
     private readonly Stopwatch _processingStopwatch = new();
     private readonly Queue<DateTime> _completionTimestamps = new();
 
     public MainViewModel()
     {
+        _settingsService = new SettingsService(LogApplicationError);
         LoadSettings();
     }
 
@@ -196,32 +197,47 @@ public partial class MainViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private async Task ScanFolders()
+    private async Task ScanFolders(CancellationToken ct)
     {
-        if (SourceFolders.Count == 0) return;
+        if (SourceFolders.Count == 0)
+            return;
 
         IsScanning = true;
         StatusMessage = "Scanning...";
 
-        var extensions = BuildExtensionSet();
-        var folders = SourceFolders.Select(f => f.Path).ToList();
-
-        var files = await Task.Run(() =>
-            _discovery.DiscoverFiles(folders, Recursive, extensions));
-
-        // Update per-folder counts and sizes
-        foreach (var folderVm in SourceFolders)
+        try
         {
-            var folderFiles = await Task.Run(() =>
-                _discovery.DiscoverFiles([folderVm.Path], Recursive, extensions));
-            folderVm.ImageCount = folderFiles.Count;
-            folderVm.TotalSizeBytes = await Task.Run(() =>
-                folderFiles.Sum(f => new FileInfo(f).Length));
-        }
+            var extensions = BuildExtensionSet();
+            var folders = SourceFolders.Select(f => f.Path).ToList();
+            var files = await Task.Run(() =>
+                _discovery.DiscoverFiles(folders, Recursive, extensions, ct), ct);
 
-        ScannedFileCount = files.Count;
-        IsScanning = false;
-        StatusMessage = $"Found {files.Count} images across {SourceFolders.Count} folder(s). Ready to resize.";
+            foreach (var folderVm in SourceFolders)
+            {
+                ct.ThrowIfCancellationRequested();
+                var folderFiles = await Task.Run(() =>
+                    _discovery.DiscoverFiles([folderVm.Path], Recursive, extensions, ct), ct);
+                folderVm.ImageCount = folderFiles.Count;
+                folderVm.TotalSizeBytes = await Task.Run(
+                    () => SumAccessibleFileSizes(folderFiles, ct), ct);
+            }
+
+            ScannedFileCount = files.Count;
+            StatusMessage = $"Found {files.Count} images across {SourceFolders.Count} folder(s). Ready to resize.";
+        }
+        catch (OperationCanceledException)
+        {
+            StatusMessage = "Scan cancelled.";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Scan failed: {ex.Message}";
+            LogApplicationError(StatusMessage);
+        }
+        finally
+        {
+            IsScanning = false;
+        }
     }
 
     [RelayCommand]
@@ -258,6 +274,14 @@ public partial class MainViewModel : ObservableObject
             ApplyPresetToOptions();
 
             var options = BuildOptions();
+            var validationError = ResizeOptionsValidator.Validate(options);
+            if (validationError != null)
+            {
+                StatusMessage = validationError;
+                LogApplicationError(validationError);
+                return;
+            }
+
             var progress = new Progress<ProcessingProgress>(p =>
             {
                 ProgressProcessed = p.Processed;
@@ -293,7 +317,7 @@ public partial class MainViewModel : ObservableObject
                     {
                         Status = fr.Status,
                         FilePath = fr.SourcePath,
-                        Message = fr.ErrorMessage,
+                        Message = fr.ErrorMessage ?? fr.WarningMessage,
                     });
             });
 
@@ -316,6 +340,7 @@ public partial class MainViewModel : ObservableObject
         catch (Exception ex)
         {
             StatusMessage = $"Error: {ex.Message}";
+            LogApplicationError(StatusMessage);
         }
         finally
         {
@@ -363,8 +388,49 @@ public partial class MainViewModel : ObservableObject
 
     // ── Helpers ─────────────────────────────────────────────────────────────
 
+    public void LogApplicationError(string message)
+    {
+        Log.Add(new LogEntryViewModel
+        {
+            Status = FileResultStatus.Error,
+            FilePath = "Application",
+            Message = message,
+        });
+    }
+
+    private static long SumAccessibleFileSizes(IEnumerable<string> files, CancellationToken ct)
+    {
+        long total = 0;
+        foreach (var file in files)
+        {
+            ct.ThrowIfCancellationRequested();
+            try
+            {
+                var info = new FileInfo(file);
+                if (info.Exists)
+                    total = checked(total + info.Length);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+            {
+                // Files can disappear or become inaccessible after enumeration; omit them from the estimate.
+            }
+            catch (OverflowException)
+            {
+                return long.MaxValue;
+            }
+        }
+
+        return total;
+    }
+
     private void AddFolderPath(string path)
     {
+        if (!Path.IsPathFullyQualified(path))
+        {
+            LogApplicationError($"Skipped folder with non-absolute path: {path}");
+            return;
+        }
+
         if (SourceFolders.Any(f => f.Path.Equals(path, StringComparison.OrdinalIgnoreCase)))
             return;
 
@@ -380,7 +446,7 @@ public partial class MainViewModel : ObservableObject
         var existing = RecentFolders.FirstOrDefault(r => r.Equals(path, StringComparison.OrdinalIgnoreCase));
         if (existing != null) RecentFolders.Remove(existing);
         RecentFolders.Insert(0, path);
-        while (RecentFolders.Count > 10)
+        while (RecentFolders.Count > AppSettings.MaxRecentFolders)
             RecentFolders.RemoveAt(RecentFolders.Count - 1);
     }
 

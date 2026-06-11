@@ -2,6 +2,8 @@ namespace BatchResizer.Models;
 
 public class ResizeOptions
 {
+    public const long DefaultMaxInputFileSizeBytes = 250L * 1024 * 1024;
+    public const long DefaultMaxInputPixels = 100_000_000;
     // Source
     public List<string> SourceFolders { get; set; } = [];
     public bool Recursive { get; set; } = true;
@@ -33,4 +35,6 @@ public class ResizeOptions
 
     // Performance
     public int MaxParallelism { get; set; } = Math.Max(1, Environment.ProcessorCount / 2);
+    public long MaxInputFileSizeBytes { get; set; } = DefaultMaxInputFileSizeBytes;
+    public long MaxInputPixels { get; set; } = DefaultMaxInputPixels;
 }

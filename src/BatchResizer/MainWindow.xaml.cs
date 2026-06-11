@@ -62,10 +62,21 @@ public partial class MainWindow : Window
 
         int result = DwmSetWindowAttribute(handle, DwmwaUseImmersiveDarkMode, ref enabled, sizeof(int));
         if (result != 0)
-            _ = DwmSetWindowAttribute(handle, DwmwaUseImmersiveDarkModeLegacy, ref enabled, sizeof(int));
+        {
+            result = DwmSetWindowAttribute(handle, DwmwaUseImmersiveDarkModeLegacy, ref enabled, sizeof(int));
+            LogDwmFailure("immersive dark mode", result);
+        }
 
-        _ = DwmSetWindowAttribute(handle, DwmwaCaptionColor, ref captionColor, sizeof(uint));
-        _ = DwmSetWindowAttribute(handle, DwmwaTextColor, ref textColor, sizeof(uint));
+        result = DwmSetWindowAttribute(handle, DwmwaCaptionColor, ref captionColor, sizeof(uint));
+        LogDwmFailure("caption color", result);
+        result = DwmSetWindowAttribute(handle, DwmwaTextColor, ref textColor, sizeof(uint));
+        LogDwmFailure("text color", result);
+    }
+
+    private void LogDwmFailure(string attribute, int hresult)
+    {
+        if (hresult != 0)
+            _vm.LogApplicationError($"Windows declined the {attribute} title-bar setting (HRESULT 0x{hresult:X8}).");
     }
 
     [DllImport("dwmapi.dll")]
