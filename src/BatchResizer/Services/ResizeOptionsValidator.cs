@@ -74,7 +74,8 @@ public static class ResizeOptionsValidator
         if (value.EndsWith(' ') || value.EndsWith('.'))
             return $"{displayName} cannot end with a space or period.";
 
-        if (WindowsReservedNames.Contains(value))
+        var stem = Path.GetFileNameWithoutExtension(value);
+        if (WindowsReservedNames.Contains(stem))
             return $"{displayName} uses a reserved Windows device name.";
 
         return null;

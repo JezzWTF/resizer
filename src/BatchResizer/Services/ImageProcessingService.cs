@@ -214,8 +214,8 @@ public class ImageProcessingService
             case BM_ResizeMode.Percentage:
             {
                 double factor = options.Percentage / 100.0;
-                targetW = (int)(image.Width * factor);
-                targetH = (int)(image.Height * factor);
+                targetW = Math.Max(1, (int)Math.Round(image.Width * factor));
+                targetH = Math.Max(1, (int)Math.Round(image.Height * factor));
                 image.Mutate(x => x.Resize(targetW, targetH, KnownResamplers.Lanczos3));
                 break;
             }

@@ -492,7 +492,9 @@ public partial class MainViewModel : ObservableObject
         Percentage = Percentage,
         OutputMode = OutputMode,
         SubfolderName = SubfolderName,
-        CustomOutputFolder = CustomOutputFolder,
+        CustomOutputFolder = Path.IsPathFullyQualified(CustomOutputFolder)
+            ? Path.GetFullPath(CustomOutputFolder)
+            : CustomOutputFolder,
         FilePrefix = FilePrefix,
         FileSuffix = FileSuffix,
         SkipExisting = SkipExisting,
